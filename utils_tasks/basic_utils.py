@@ -20,8 +20,11 @@ class PlanningInput:
 class PlanningOutput:
     trajectory_points_world: Optional[np.ndarray] = None
     all_trajectories_world: Optional[List[np.ndarray]] = None
+    all_trajectories_camera: Optional[np.ndarray] = None
+    point_goals_camera: Optional[np.ndarray] = None
     all_values_camera: Optional[np.ndarray] = None
     sub_pointgoal_pd: Optional[np.ndarray] = None
+    mode_debug: Optional[dict] = None
     is_planning: bool = False
     planning_error: Optional[str] = None
 

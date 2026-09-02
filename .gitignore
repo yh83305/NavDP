@@ -10,3 +10,7 @@ __pycache__
 assets/scenes/Materials/*
 assets/scenes/SkyTexture/*
 assets/scenes/embodiedscan/*
+
+# Local benchmark outputs and helper scripts
+/cmd.bash
+/pointgoal_*/

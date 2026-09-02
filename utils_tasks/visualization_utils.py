@@ -4,8 +4,10 @@ from collections import deque
 from scipy.ndimage import binary_dilation
 
 class VisualizationManager:
-    def __init__(self, history_size=5):
+    def __init__(self, history_size=5, view_extent_m=6.0, render_resolution=0.01):
         self.history_size = history_size
+        self.view_extent_m = float(view_extent_m)
+        self.render_resolution = float(render_resolution)
         self.occupancy_history = deque(maxlen=history_size)  # Will store (grid, min_coords, robot_pose)
         self.resolution = 0.05  # 5cm per pixel
         self.inflation = 5      # inflation radius in pixels
@@ -20,12 +22,16 @@ class VisualizationManager:
                 depth_map = depth_map[:,:,0]
             height, width = depth_map.shape
             uu, vv = np.meshgrid(np.arange(width), np.arange(height))
-            z = depth_map
-            x = (uu - intrinsic[0, 2]) * z / intrinsic[0, 0]
-            y = (vv - intrinsic[1, 2]) * z / intrinsic[1, 1]
-            
-            # Filter valid points
+            z = np.asarray(depth_map, dtype=np.float32)
+            # Mask invalid RTX pixels before projection. Multiplying image
+            # coordinates by inf and filtering afterwards emits warnings and
+            # can contaminate intermediate arrays with NaNs.
             valid_mask = (z > 0) & np.isfinite(z) & (z < 10)
+            z_project = np.where(valid_mask, z, 0.0)
+            x = (uu - intrinsic[0, 2]) * z_project / intrinsic[0, 0]
+            y = (vv - intrinsic[1, 2]) * z_project / intrinsic[1, 1]
+
+            # Filter valid points
             points_3d = np.stack((x[valid_mask], y[valid_mask], z[valid_mask]), axis=-1)
             
             # Apply camera roll
@@ -73,9 +79,9 @@ class VisualizationManager:
         
         return occupancy_grid, min_coords
         
-    def visualize_trajectory(self, rgb_image, depth_image, intrinsic, trajectory_points, robot_pose, camera_roll=0, all_trajectories_points=None, all_trajectories_values=None):
-        # Calculate visualization size based on 10m×10m range
-        grid_size = int(10.0 / self.resolution)  # 20m in grid cells
+    def visualize_trajectory(self, rgb_image, depth_image, intrinsic, trajectory_points, robot_pose, camera_roll=0, all_trajectories_points=None, all_trajectories_values=None, all_trajectories_modes=None, selected_trajectory_index=None):
+        # A tighter local view makes the 2-4 m candidate horizon readable.
+        grid_size = int(self.view_extent_m / self.render_resolution)
         vis_image = np.zeros((grid_size, grid_size, 3), dtype=np.uint8)
 
         # Resize visualization to match RGB image height with better interpolation
@@ -163,12 +169,12 @@ class VisualizationManager:
             return vis_coords
 
         # Draw historical points (Gray)
-        vis_coords_hist = transform_to_vis_coords(all_hist_world_points, robot_pose, self.resolution, center_offset, grid_size)
+        vis_coords_hist = transform_to_vis_coords(all_hist_world_points, robot_pose, self.render_resolution, center_offset, grid_size)
         if vis_coords_hist.size > 0:
             vis_image[vis_coords_hist[:, 0], vis_coords_hist[:, 1]] = (128, 128, 128) # Gray
 
         # Draw current points (Red)
-        vis_coords_current = transform_to_vis_coords(current_world_points, robot_pose, self.resolution, center_offset, grid_size)
+        vis_coords_current = transform_to_vis_coords(current_world_points, robot_pose, self.render_resolution, center_offset, grid_size)
         if vis_coords_current.size > 0:
             vis_image[vis_coords_current[:, 0], vis_coords_current[:, 1]] = (0, 0, 255) # Red
         
@@ -186,7 +192,7 @@ class VisualizationManager:
             transformed_points = (current_rotation @ np.vstack([dx, dy])).T
             
             # Convert to grid coordinates
-            grid_points = (transformed_points / self.resolution).astype(int)
+            grid_points = (transformed_points / self.render_resolution).astype(int)
             
             # Filter points within range
             valid_mask = (np.abs(grid_points[:, 0]) < grid_size//2) & (np.abs(grid_points[:, 1]) < grid_size//2)
@@ -206,8 +212,8 @@ class VisualizationManager:
                 cv2.circle(vis_image, tuple(vis_points[0]), 3, (255, 0, 0), -1, cv2.LINE_AA)  # Blue for start
                 
                 # Draw robot rectangle at start position
-                rect_length = 10  # pixels
-                rect_width = 5   # pixels
+                rect_length = max(4, int(0.50 / self.render_resolution))
+                rect_width = max(2, int(0.25 / self.render_resolution))
                 start_point = (center_offset, center_offset)
                 # Get yaw angle from trajectory points
                 yaw = -robot_pose[2]
@@ -278,8 +284,26 @@ class VisualizationManager:
             
             return (int(b), int(g), int(r))  # Return BGR color
         
-        # Set default colors if no values provided
-        if all_trajectories_values is None:
+        # Fixed RGB palette; yellow is reserved exclusively for selection.
+        mode_colors = (
+            (50, 120, 255),   # m0: blue
+            (0, 220, 255),    # m1: cyan
+            (60, 255, 80),    # m2: green
+            (255, 80, 50),    # m3: red
+            (230, 80, 255),   # m4: magenta
+        )
+        if all_trajectories_modes is not None:
+            # Official NavDP returns candidates without mode-debug metadata.
+            # A short/empty debug list must not shorten the color table below
+            # the actual number of trajectories.
+            trajectory_colors = []
+            for idx in range(len(all_trajectories_points)):
+                mode = (
+                    int(all_trajectories_modes[idx])
+                    if idx < len(all_trajectories_modes) else idx
+                )
+                trajectory_colors.append(mode_colors[mode % len(mode_colors)])
+        elif all_trajectories_values is None:
             colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255), (255, 0, 255)]
             trajectory_colors = [colors[idx % len(colors)] for idx in range(len(all_trajectories_points))]
         else:
@@ -289,7 +313,16 @@ class VisualizationManager:
             # Generate color for each trajectory
             trajectory_colors = [value_to_color(v, values_min, values_max) for v in all_trajectories_values]
         
-        for idx, traj in enumerate(all_trajectories_points):
+        label_specs = []
+        draw_order = list(range(len(all_trajectories_points)))
+        if selected_trajectory_index is not None:
+            selected_index = int(selected_trajectory_index)
+            if selected_index in draw_order:
+                draw_order.remove(selected_index)
+                draw_order.append(selected_index)
+        selected_color = (255, 255, 0)  # RGB bright yellow in imageio output.
+        for idx in draw_order:
+            traj = all_trajectories_points[idx]
             color = trajectory_colors[idx]
             
             # Transform trajectory points
@@ -300,7 +333,7 @@ class VisualizationManager:
             transformed_points = (current_rotation @ np.vstack([dx, dy])).T
             
             # Convert to grid coordinates
-            grid_points = (transformed_points / self.resolution).astype(int)
+            grid_points = (transformed_points / self.render_resolution).astype(int)
             
             # Filter points within range
             valid_mask = (np.abs(grid_points[:, 0]) < grid_size//2) & (np.abs(grid_points[:, 1]) < grid_size//2)
@@ -312,36 +345,84 @@ class VisualizationManager:
             vis_points_all[:, 1] = -grid_points[:, 0] + center_offset
             
             # Draw trajectory with anti-aliased lines
+            selected = selected_trajectory_index is not None and idx == int(selected_trajectory_index)
+            draw_color = selected_color if selected else color
+            thickness = 4 if selected else 1
             for i in range(len(vis_points_all) - 1):
-                cv2.line(vis_image_all, tuple(vis_points_all[i]), tuple(vis_points_all[i+1]), color, 1, cv2.LINE_AA)
+                cv2.line(vis_image_all, tuple(vis_points_all[i]), tuple(vis_points_all[i+1]), draw_color, thickness, cv2.LINE_AA)
                 
             # Draw start and end points with anti-aliasing
             if len(vis_points_all) > 0:
-                cv2.circle(vis_image_all, tuple(vis_points_all[0]), 2, color, -1, cv2.LINE_AA)
+                cv2.circle(vis_image_all, tuple(vis_points_all[0]), 2, draw_color, -1, cv2.LINE_AA)
+                if all_trajectories_modes is not None and idx < len(all_trajectories_modes):
+                    anchor_index = min(
+                        len(vis_points_all) - 1,
+                        max(0, int((0.52 + 0.10 * (idx % 4)) * len(vis_points_all))),
+                    )
+                    label_specs.append((
+                        vis_points_all[anchor_index].copy(),
+                        "m%d" % int(all_trajectories_modes[idx]),
+                        draw_color,
+                    ))
         
         # Draw robot position with anti-aliasing
         if len(vis_points) > 0:
             corners_int = rotated_corners.astype(np.int32)
             cv2.polylines(vis_image_all, [corners_int], True, (255, 255, 255), 1, cv2.LINE_AA)  # White robot outline
         
-        # Resize all trajectories visualization - align width with rgb_image
-        # Get target width (same as rgb_image width)
+        # First-person and candidate map occupy equal-width halves. Pad the RGB
+        # vertically instead of distorting the square metric map.
         target_width = rgb_image.shape[1]
-        # Calculate the height to maintain aspect ratio
-        target_height = int(vis_image_all.shape[0] * (target_width / vis_image_all.shape[1]))
-        # Resize with the calculated dimensions using better interpolation
-        vis_resized_all = cv2.resize(vis_image_all, (target_width, target_height), interpolation=cv2.INTER_CUBIC)
-        # Apply slight Gaussian blur to smooth pixelated edges
-        vis_resized_all = cv2.GaussianBlur(vis_resized_all, (3, 3), 0.5)
+        target_height = target_width
+        vis_resized_all = cv2.resize(
+            vis_image_all, (target_width, target_height),
+            interpolation=cv2.INTER_AREA if grid_size > target_width else cv2.INTER_LINEAR,
+        )
+        # Draw labels after resizing so their font stays readable and does not
+        # get magnified with the metric grid. Greedy placement avoids overlap.
+        occupied_label_boxes = []
+        label_scale = target_width / float(grid_size)
+        label_offsets = (
+            (10, -8), (10, 20), (-42, -8), (-42, 20),
+            (28, -28), (28, 38), (-60, -28), (-60, 38),
+            (48, -48), (48, 58), (-80, -48), (-80, 58),
+            (10, -68), (10, 78), (-42, -68), (-42, 78),
+        )
+        for label_index, (anchor_grid, mode_text, color) in enumerate(label_specs):
+            anchor = np.rint(anchor_grid * label_scale).astype(int)
+            text_size, baseline = cv2.getTextSize(
+                mode_text, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 1
+            )
+            label_box = None
+            label_origin = None
+            ordered_offsets = label_offsets[label_index % len(label_offsets):] + label_offsets[:label_index % len(label_offsets)]
+            for offset_x, offset_y in ordered_offsets:
+                x = int(np.clip(anchor[0] + offset_x, 2, target_width - text_size[0] - 4))
+                y = int(np.clip(anchor[1] + offset_y, text_size[1] + 4, target_height - baseline - 3))
+                box = (x - 3, y - text_size[1] - 3,
+                       x + text_size[0] + 3, y + baseline + 3)
+                overlaps = any(
+                    not (box[2] < old[0] or box[0] > old[2]
+                         or box[3] < old[1] or box[1] > old[3])
+                    for old in occupied_label_boxes
+                )
+                if not overlaps:
+                    label_box, label_origin = box, (x, y)
+                    break
+            if label_box is None:
+                continue
+            occupied_label_boxes.append(label_box)
+            box_center = ((label_box[0] + label_box[2]) // 2,
+                          (label_box[1] + label_box[3]) // 2)
+            cv2.line(vis_resized_all, tuple(anchor), box_center, color, 1, cv2.LINE_AA)
+            cv2.rectangle(vis_resized_all, label_box[:2], label_box[2:],
+                          (15, 15, 15), -1)
+            cv2.putText(vis_resized_all, mode_text, label_origin,
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.50, color, 1, cv2.LINE_AA)
+        rgb_panel = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+        rgb_y = max((target_height - rgb_image.shape[0]) // 2, 0)
+        copy_height = min(rgb_image.shape[0], target_height)
+        rgb_panel[rgb_y:rgb_y + copy_height] = rgb_image[:copy_height]
+        final_combined_image = np.concatenate((rgb_panel, vis_resized_all), axis=1)
         
-        # Create black padding to match combined_image width
-        if combined_image.shape[1] > target_width:
-            # Add black padding to the right
-            padding_width = combined_image.shape[1] - target_width
-            padding = np.zeros((target_height, padding_width, 3), dtype=np.uint8)
-            vis_resized_all = np.concatenate((vis_resized_all, padding), axis=1)
-        
-        # Stack vertically: combined_image (top) and vis_resized_all (bottom)
-        final_combined_image = np.concatenate((combined_image, vis_resized_all), axis=0)
-        
-        return final_combined_image 
+        return final_combined_image

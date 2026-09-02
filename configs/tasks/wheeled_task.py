@@ -632,4 +632,3 @@ class DingoExplorationCfg(ManagerBasedRLEnvCfg):
         self.sim.disable_contact_processing = True
 
         
-

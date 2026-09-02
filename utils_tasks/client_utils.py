@@ -5,6 +5,12 @@ import io
 import json
 import time
 
+def navigator_health(port=8888):
+    """Return server build/checkpoint metadata for reproducible evaluations."""
+    response = requests.get("http://localhost:%d/health" % port, timeout=10)
+    response.raise_for_status()
+    return response.json()
+
 def navigator_reset(intrinsic=None,stop_threshold=-0.5,batch_size=1,port=8888,env_id=None):
     print("http://localhost:%d/navigator_reset"%port)
     if env_id is None:
@@ -70,14 +76,15 @@ def pointgoal_step(point_goals,rgb_images,depth_images,port=8888):
         'rgb_time':time.time(),
     }
     response = requests.post(url, files=files, data=data)
-    trajectory = json.loads(response.text)['trajectory']
-    all_trajectory = json.loads(response.text)['all_trajectory']
-    all_value = json.loads(response.text)['all_values']
-    if 'sub_pointgoal_pd' in json.loads(response.text):
-        sub_pointgoal_pd = json.loads(response.text)['sub_pointgoal_pd']
-        return np.array(trajectory),np.array(all_trajectory),np.array(all_value),sub_pointgoal_pd
-    else:
-        return np.array(trajectory),np.array(all_trajectory),np.array(all_value)
+    payload = response.json()
+    trajectory = payload['trajectory']
+    all_trajectory = payload['all_trajectory']
+    all_value = payload['all_values']
+    if 'sub_pointgoal_pd' in payload:
+        return np.array(trajectory),np.array(all_trajectory),np.array(all_value),payload['sub_pointgoal_pd']
+    if 'selector_diagnostics' in payload:
+        return np.array(trajectory),np.array(all_trajectory),np.array(all_value),payload['selector_diagnostics']
+    return np.array(trajectory),np.array(all_trajectory),np.array(all_value)
 
 def imagegoal_step(image_goals,rgb_images,depth_images,port=8888):
     concat_images = np.concatenate([img for img in rgb_images],axis=0)
@@ -112,8 +119,5 @@ def imagegoal_step(image_goals,rgb_images,depth_images,port=8888):
     all_trajectory = json.loads(response.text)['all_trajectory']
     all_value = json.loads(response.text)['all_values']
     return np.array(trajectory),np.array(all_trajectory),np.array(all_value)
-
-
-
 
 
