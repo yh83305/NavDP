@@ -75,7 +75,10 @@ mpc = None
 # Only our explicit-mode FLUX server implements the candidate mode/debug
 # contract. Every official or third-party NavDP benchmark method keeps the
 # original value-colored visualization even if it returns extra diagnostics.
-MODE_DEBUG_VISUALIZATION_ALGOS = {"flux_explicit_modes_rule16"}
+MODE_DEBUG_VISUALIZATION_ALGOS = {
+    "flux_explicit_modes_rule16",
+    "flux_direction5_speed3_rule16",
+}
 
 def planning_thread(env, camera_intrinsic):
     global mpc

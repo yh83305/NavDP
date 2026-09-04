@@ -302,7 +302,10 @@ class VisualizationManager:
                     int(all_trajectories_modes[idx])
                     if idx < len(all_trajectories_modes) else idx
                 )
-                trajectory_colors.append(mode_colors[mode % len(mode_colors)])
+                direction, speed = divmod(mode, 3)
+                base = np.asarray(mode_colors[direction % len(mode_colors)], dtype=np.float32)
+                brightness = (0.55, 0.78, 1.0)[speed]
+                trajectory_colors.append(tuple((base * brightness).clip(0, 255).astype(np.uint8)))
         elif all_trajectories_values is None:
             colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255), (255, 0, 255)]
             trajectory_colors = [colors[idx % len(colors)] for idx in range(len(all_trajectories_points))]
@@ -361,7 +364,7 @@ class VisualizationManager:
                     )
                     label_specs.append((
                         vis_points_all[anchor_index].copy(),
-                        "m%d" % int(all_trajectories_modes[idx]),
+                        "d%ds%d" % divmod(int(all_trajectories_modes[idx]), 3),
                         draw_color,
                     ))
         
