@@ -4,7 +4,7 @@ from collections import deque
 from scipy.ndimage import binary_dilation
 
 class VisualizationManager:
-    def __init__(self, history_size=5, view_extent_m=6.0, render_resolution=0.01):
+    def __init__(self, history_size=5, view_extent_m=10.0, render_resolution=0.05):
         self.history_size = history_size
         self.view_extent_m = float(view_extent_m)
         self.render_resolution = float(render_resolution)

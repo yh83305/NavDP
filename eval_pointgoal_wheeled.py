@@ -66,6 +66,10 @@ perf_samples = {name: [] for name in (
     "planning",
 )}
 vis_manager = [VisualizationManager(history_size=5) for i in range(args_cli.num_envs)]
+mode_vis_manager = [
+    VisualizationManager(history_size=5, view_extent_m=6.0, render_resolution=0.01)
+    for i in range(args_cli.num_envs)
+]
 mpc = None
 
 # Only our explicit-mode FLUX server implements the candidate mode/debug
@@ -508,7 +512,8 @@ while simulation_app.is_running():
                     current_mode_debug[i].get("candidate_debug", [])
                     if use_mode_visualization else None
                 )
-                vis_image = vis_manager[i].visualize_trajectory(
+                active_vis_manager = mode_vis_manager[i] if use_mode_visualization else vis_manager[i]
+                vis_image = active_vis_manager.visualize_trajectory(
                     images[i], depths[i][:,:,None], camera_intrinsic.cpu().numpy(),
                     current_trajectory[i],
                     robot_pose=x0[i],
