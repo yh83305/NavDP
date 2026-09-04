@@ -15,6 +15,7 @@ class PlanningInput:
     current_depth: Optional[np.ndarray] = None
     camera_pos: Optional[np.ndarray] = None
     camera_rot: Optional[np.ndarray] = None
+    observation_time: Optional[np.ndarray] = None
 
 @dataclass
 class PlanningOutput:

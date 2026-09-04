@@ -95,12 +95,19 @@ def planning_thread(env, camera_intrinsic):
                 depth = planning_input.current_depth.copy()
                 camera_pos = planning_input.camera_pos.copy()
                 camera_rot = planning_input.camera_rot.copy()
+                observation_time = (
+                    None if planning_input.observation_time is None
+                    else planning_input.observation_time.copy()
+                )
             with output_lock:
                 planning_output.is_planning = True
             
             # Start timing planning
             planning_start = time.time()
-            result = pointgoal_step(goal, image, depth,port=args_cli.port)
+            result = pointgoal_step(
+                goal, image, depth, port=args_cli.port,
+                observation_time=observation_time,
+            )
             trajectory_points_camera, all_trajectories_camera, all_values_camera = result[:3]
             mode_debug = result[3] if len(result) >= 4 and isinstance(result[3], list) and result[3] and isinstance(result[3][0], dict) and "candidate_debug" in result[3][0] else None
             # Transform trajectory from camera frame to world frame
@@ -476,6 +483,10 @@ while simulation_app.is_running():
             planning_input.current_depth = depths.copy()
             planning_input.camera_pos = camera_pos.copy()
             planning_input.camera_rot = camera_rot.copy()
+            planning_input.observation_time = (
+                env.unwrapped.episode_length_buf.float().cpu().numpy()
+                * float(env.unwrapped.step_dt)
+            )
 
         # based on the current world trajectory 
         robot_vel = env.unwrapped.scene.articulations['robot'].data.root_lin_vel_w[0, :2].norm().cpu().numpy()

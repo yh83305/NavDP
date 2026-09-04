@@ -50,7 +50,7 @@ def nogoal_step(rgb_images,depth_images,port=8888):
     all_value = json.loads(response.text)['all_values']
     return np.array(trajectory),np.array(all_trajectory),np.array(all_value)
 
-def pointgoal_step(point_goals,rgb_images,depth_images,port=8888):
+def pointgoal_step(point_goals,rgb_images,depth_images,port=8888,observation_time=None):
     concat_images = np.concatenate([img for img in rgb_images],axis=0)
     concat_depths = np.concatenate([img for img in depth_images],axis=0)
     url = "http://localhost:%d/pointgoal_step"%port
@@ -75,6 +75,10 @@ def pointgoal_step(point_goals,rgb_images,depth_images,port=8888):
         'depth_time':time.time(),
         'rgb_time':time.time(),
     }
+    if observation_time is not None:
+        data['observation_time'] = json.dumps(
+            np.asarray(observation_time, dtype=np.float64).reshape(-1).tolist()
+        )
     response = requests.post(url, files=files, data=data)
     payload = response.json()
     trajectory = payload['trajectory']
@@ -119,5 +123,4 @@ def imagegoal_step(image_goals,rgb_images,depth_images,port=8888):
     all_trajectory = json.loads(response.text)['all_trajectory']
     all_value = json.loads(response.text)['all_values']
     return np.array(trajectory),np.array(all_trajectory),np.array(all_value)
-
 
