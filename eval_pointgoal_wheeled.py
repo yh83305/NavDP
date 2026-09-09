@@ -188,12 +188,12 @@ def draw_mode_debug_panel(image, debug):
     map_height = 0
     panel_height = max(image.shape[0], map_height + 40 + 24 * (len(rows) + 3))
     panel = np.full((panel_height, panel_width, 3), (18, 22, 28), dtype=np.uint8)
-    cv2.putText(panel, "MODE SELECT DEBUG  unified score + argmax", (12, 22), cv2.FONT_HERSHEY_SIMPLEX,
+    cv2.putText(panel, "MODE SELECT DEBUG  unified cost + argmin", (12, 22), cv2.FONT_HERSHEY_SIMPLEX,
                 0.58, (255, 255, 255), 1, cv2.LINE_AA)
     table_top = map_height + 18
     # Hershey fonts are proportional; fixed x positions keep every column aligned.
     columns = ((8, "idx"), (45, "mode"), (92, "P"), (132, "goal"),
-               (210, "esdf"), (280, "unk"), (350, "final"), (445, "state"))
+               (210, "esdf"), (280, "unk"), (350, "cost"), (445, "state"))
     for x, label in columns:
         cv2.putText(panel, label, (x, table_top + 27), cv2.FONT_HERSHEY_SIMPLEX,
                     0.38, (190, 200, 210), 1, cv2.LINE_AA)
@@ -208,10 +208,10 @@ def draw_mode_debug_panel(image, debug):
             (8, f"{candidate.get('index', -1):02d}"),
             (45, f"m{candidate.get('mode', -1)}"),
             (92, _format_debug_number(candidate.get("prior"))),
-            (132, _format_debug_number(candidate.get("goal_score"), signed=True)),
+            (132, _format_debug_number(candidate.get("goal_cost"))),
             (210, _format_debug_number(candidate.get("minimum_esdf_clearance_m"), signed=True)),
             (280, _format_debug_number(candidate.get("unknown_fraction"))),
-            (350, _format_debug_number(candidate.get("final_score"), signed=True)),
+            (350, _format_debug_number(candidate.get("final_cost"))),
             (445, "SELECTED" if selected else "SCORED"),
         )
         for x, value in values:
