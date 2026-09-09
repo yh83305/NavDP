@@ -192,8 +192,8 @@ def draw_mode_debug_panel(image, debug):
                 0.58, (255, 255, 255), 1, cv2.LINE_AA)
     table_top = map_height + 18
     # Hershey fonts are proportional; fixed x positions keep every column aligned.
-    columns = ((8, "idx"), (45, "mode"), (92, "P"), (132, "goal"),
-               (210, "esdf"), (280, "unk"), (350, "cost"), (445, "state"))
+    columns = ((8, "idx"), (45, "mode"), (92, "P"), (140, "goal"),
+               (225, "clear"), (315, "cost"), (410, "state"))
     for x, label in columns:
         cv2.putText(panel, label, (x, table_top + 27), cv2.FONT_HERSHEY_SIMPLEX,
                     0.38, (190, 200, 210), 1, cv2.LINE_AA)
@@ -208,11 +208,10 @@ def draw_mode_debug_panel(image, debug):
             (8, f"{candidate.get('index', -1):02d}"),
             (45, f"m{candidate.get('mode', -1)}"),
             (92, _format_debug_number(candidate.get("prior"))),
-            (132, _format_debug_number(candidate.get("goal_cost"))),
-            (210, _format_debug_number(candidate.get("minimum_esdf_clearance_m"), signed=True)),
-            (280, _format_debug_number(candidate.get("unknown_fraction"))),
-            (350, _format_debug_number(candidate.get("final_cost"))),
-            (445, "SELECTED" if selected else "SCORED"),
+            (140, _format_debug_number(candidate.get("goal_cost"))),
+            (225, _format_debug_number(candidate.get("clearance_cost"))),
+            (315, _format_debug_number(candidate.get("final_cost"))),
+            (410, "SELECTED" if selected else "SCORED"),
         )
         for x, value in values:
             cv2.putText(panel, value, (x, y), cv2.FONT_HERSHEY_SIMPLEX,
