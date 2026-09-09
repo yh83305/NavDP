@@ -562,7 +562,15 @@ while simulation_app.is_running():
                     vis_image = draw_box_with_text(vis_image,0,0,430,50,"desired lin.:%.2f ang.:%.2f"%(v,w))
                     vis_image = draw_box_with_text(vis_image,0,50,430,50,"actual lin.:%.2f ang.:%.2f"%(robot_vel,robot_ang_vel))
                     if current_all_values is not None:
-                        vis_image = draw_box_with_text(vis_image,0,770,430,50,"critic max:%.2f min:%.2f"%(np.max(current_all_values[i]), np.min(current_all_values[i])))
+                        if use_mode_visualization:
+                            value_text = "cost min:%.2f max:%.2f" % (
+                                np.min(current_all_values[i]), np.max(current_all_values[i])
+                            )
+                        else:
+                            value_text = "critic max:%.2f min:%.2f" % (
+                                np.max(current_all_values[i]), np.min(current_all_values[i])
+                            )
+                        vis_image = draw_box_with_text(vis_image,0,770,430,50,value_text)
                     vis_image = draw_box_with_text(vis_image,0,820,430,50,"point goal:(%.2f, %.2f)"%(goals[i][0],goals[i][1]))
                     cv2.imwrite(f"frame_test.png", cv2.cvtColor(vis_image, cv2.COLOR_RGB2BGR))
                     fps_writer[i].append_data(vis_image)
