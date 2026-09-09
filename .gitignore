@@ -14,3 +14,4 @@ assets/scenes/embodiedscan/*
 # Local benchmark outputs and helper scripts
 /cmd.bash
 /pointgoal_*/
+/smoke_*/
